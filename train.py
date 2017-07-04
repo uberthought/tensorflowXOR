@@ -1,34 +1,31 @@
 import tensorflow as tf
+from tensorflow.contrib.keras.api.keras.layers import Dense
+from tensorflow.contrib.keras.api.keras.losses import mean_squared_error
 
-x_ = tf.placeholder(tf.float32, shape=[4,2], name='x-input')
-y_ = tf.placeholder(tf.float32, shape=[4,2], name='y-input')
+sess = tf.Session()
 
-Theta1 = tf.Variable(tf.random_uniform([2,2], -1, 1), name='Theta1')
-Theta2 = tf.Variable(tf.random_uniform([2,2], -1, 1), name='Theta2')
+input_layer = tf.placeholder(tf.float32, shape=(None, 2), name='input')
 
-Bias1 = tf.Variable(tf.zeros([2]), name='Bias1')
-Bias2 = tf.Variable(tf.zeros([2]), name='Bias2')
+hidden = Dense(4, activation='sigmoid', name='hidden')(input_layer)
+prediction = Dense(2, activation='sigmoid', name='prediction')(hidden)
 
-A2 = tf.sigmoid(tf.matmul(x_, Theta1) + Bias1)
-Hypothesis = tf.sigmoid(tf.matmul(A2, Theta2) + Bias2)
-
-cost = tf.reduce_mean(((y_ * tf.log(Hypothesis)) + ((1 - y_) * tf.log(1.0 - Hypothesis))) * -1)
+expected = tf.placeholder(tf.float32, shape=(None, 2), name='expected')
+loss = tf.reduce_mean(mean_squared_error(expected, prediction))
 
 global_step = tf.Variable(0, name='global_step', trainable=False)
-train_step = tf.train.AdagradOptimizer(0.01).minimize(cost, global_step=global_step)
+# train_step = tf.train.AdagradOptimizer(0.2).minimize(loss, global_step=global_step)
+train_step = tf.train.GradientDescentOptimizer(0.5).minimize(loss, global_step=global_step)
 
-tf.summary.scalar('cost', cost)
-tf.summary.histogram('Hypothesis', Hypothesis)
-tf.summary.histogram('Theta1', Theta1)
-tf.summary.histogram('Theta2', Theta2)
+tf.summary.scalar('loss', loss)
+tf.summary.histogram('Hidden', hidden)
+tf.summary.histogram('Prediction', prediction)
 merged = tf.summary.merge_all()
 
-XOR_X = [[0,0], [0,1], [1,0], [1,1]]
-XOR_Y = [[0,1], [1,0], [1,0], [0,1]]
+INPUT_DATA = [[0, 0], [0, 1], [1, 0], [1, 1]]
+EXPECTED_DATA = [[1, 0], [0, 0], [0, 0], [1, 0]]
 
 init = tf.global_variables_initializer()
 
-sess = tf.Session()
 sess.run(init)
 
 saver = tf.train.Saver()
@@ -36,11 +33,13 @@ saver.restore(sess, "xor.ckpt")
 
 train_writer = tf.summary.FileWriter('./train', sess.graph)
 
-for i in range(1000000):
-	summary, acc = sess.run([merged, train_step], feed_dict={x_: XOR_X, y_: XOR_Y})
-	train_writer.add_summary(summary, i)
-	if (i % 1000 == 0):
-		print('Epoch ', i)
-		save_path = saver.save(sess, "xor.ckpt")
-		print("Model saved as %s" % save_path);
-
+for i in range(100000):
+    summary, acc, error, out, e = sess.run([merged, train_step, loss, prediction, expected],
+                                           feed_dict={input_layer: INPUT_DATA, expected: EXPECTED_DATA})
+    train_writer.add_summary(summary, i)
+    if (i % 1000 == 0):
+        print('Epoch ', i)
+        print('Error ', error)
+        save_path = saver.save(sess, "xor.ckpt")
+        print("Prediction", out)
+        print("Expected", e)
